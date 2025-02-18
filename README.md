@@ -1,0 +1,3 @@
+# Kata
+
+My training exercises.
