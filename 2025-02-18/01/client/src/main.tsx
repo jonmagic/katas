@@ -5,12 +5,48 @@ import { ApolloProvider, ApolloClient, InMemoryCache, gql, useQuery } from '@apo
 import { init, RematchRootState, RematchDispatch, Models } from '@rematch/core'
 import { Provider, useSelector, useDispatch } from 'react-redux'
 
-// Define the pagination model
+// Inject CSS directly into the document
+const styles = `
+  .random-user {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background-color: #f3f3f3;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 1rem;
+    font-weight: bold;
+  }
+
+  .user-info {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .spammy {
+    color: red;
+  }
+
+  .not-spammy {
+    color: green;
+  }
+`
+
+const styleElement = document.createElement('style')
+styleElement.innerHTML = styles
+document.head.appendChild(styleElement)
+
+// Define Redux models
 const pagination = {
-  state: { page: 1 }, // initial state
+  state: { page: 1, randomUser: null, refreshUser: 0 }, // Track refresh signal
   reducers: {
-    nextPage: (state) => ({ page: state.page + 1 }),
-    prevPage: (state) => ({ page: Math.max(1, state.page - 1) })
+    nextPage: (state) => ({ ...state, page: state.page + 1, refreshUser: state.refreshUser + 1 }),
+    prevPage: (state) => ({ ...state, page: Math.max(1, state.page - 1), refreshUser: state.refreshUser + 1 }),
+    setRandomUser: (state, randomUser) => ({ ...state, randomUser }),
+    refreshRandomUser: (state) => ({ ...state, refreshUser: state.refreshUser + 1 }) // Trigger user refresh
   }
 }
 
@@ -37,13 +73,58 @@ const client = new ApolloClient({
 const GET_USERS = gql`
   query GetUsers($page: Int!) {
     users(page: $page) {
-      timestamp
       username
       email
+      timestamp
       spammy
     }
   }
 `
+
+const GET_RANDOM_USER = gql`
+  query GetRandomUser($username: String!) {
+    user(username: $username) {
+      username
+      email
+      timestamp
+      spammy
+    }
+  }
+`
+
+const RandomUser: React.FC = () => {
+  const dispatch = useDispatch<Dispatch>()
+  const { randomUser, refreshUser } = useSelector((state: RootState) => ({
+    randomUser: state.pagination.randomUser,
+    refreshUser: state.pagination.refreshUser // Triggers when the page changes
+  }))
+
+  React.useEffect(() => {
+    const randomUsername = `user${Math.floor(Math.random() * 100) + 1}`
+    client
+      .query({ query: GET_RANDOM_USER, variables: { username: randomUsername }, fetchPolicy: 'no-cache' })
+      .then(response => {
+        if (response.data?.user) {
+          dispatch.pagination.setRandomUser(response.data.user)
+        }
+      })
+  }, [refreshUser, dispatch]) // Re-fetch when `refreshUser` changes
+
+  if (!randomUser) return <p>Loading random user...</p>
+
+  const { username, email, timestamp, spammy } = randomUser
+
+  return (
+    <div className="random-user">
+      <div className="user-info">{username}</div>
+      <div className="user-info">{email}</div>
+      <div className="user-info">{new Date(timestamp).toLocaleString()}</div>
+      <div className={`user-info ${spammy ? 'spammy' : 'not-spammy'}`}>
+        {spammy ? 'Spammy' : 'Not Spammy'}
+      </div>
+    </div>
+  )
+}
 
 const UserList: React.FC = () => {
   const page = useSelector((state: RootState) => state.pagination.page)
@@ -100,9 +181,12 @@ const App: React.FC = () => (
   <Provider store={store}>
     <ApolloProvider client={client}>
       <BrowserRouter>
-        <Switch>
-          <Route path="/" exact component={UserList} />
-        </Switch>
+        <div style={{ maxWidth: '800px', margin: 'auto' }}>
+          <RandomUser />
+          <Switch>
+            <Route path="/" exact component={UserList} />
+          </Switch>
+        </div>
       </BrowserRouter>
     </ApolloProvider>
   </Provider>

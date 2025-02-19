@@ -25,19 +25,28 @@ const typeDefs = /* GraphQL */ `
   type Query {
     users(page: Int!): [User!]!
     user(username: String!): User
-    spammyUsers: [User!]!
   }
 `
 
 const resolvers = {
   Query: {
-    users: (_: unknown, { page }: { page: number }): User[] => {
+    users: async (_: unknown, { page }: { page: number }): Promise<User[]> => {
       const start = (page - 1) * 10
+      const delay = Math.floor(Math.random() * (1000 - 100 + 1)) + 100 // Random delay between 100ms - 1000ms
+
+      console.log(`Simulating ${delay}ms delay for users query...`)
+      await new Promise(resolve => setTimeout(resolve, delay)) // Introduce artificial delay
+
       return users.slice(start, start + 10)
     },
-    user: (_: unknown, { username }: { username: string }): User | undefined =>
-      users.find(u => u.username === username),
-    spammyUsers: (): User[] => users.filter(u => u.spammy)
+    user: async (_: unknown, { username }: { username: string }): Promise<User | undefined> => {
+      const delay = Math.floor(Math.random() * (1000 - 100 + 1)) + 100 // Random delay
+
+      console.log(`Simulating ${delay}ms delay for user query (username: ${username})...`)
+      await new Promise(resolve => setTimeout(resolve, delay)) // Introduce artificial delay
+
+      return users.find(u => u.username === username)
+    }
   }
 }
 
